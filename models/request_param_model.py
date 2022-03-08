@@ -12,6 +12,15 @@ class RequestParamModel:
         self.__city = city
         self.__command = command
         self.__previous_step = None
+        self.__sort_order = 'PRICE'
+
+    @property
+    def sort_order(self):
+        return self.__sort_order
+
+    @sort_order.setter
+    def sort_order(self, value: str):
+        self.__sort_order = value
 
     @property
     def previous_step(self):

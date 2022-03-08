@@ -1,15 +1,16 @@
 import functools
 import os
-from typing import Callable, Union
-from telebot import types, TeleBot
-from telebot.types import Message
+import re
+from typing import Callable
 
+from loguru import logger
+from telebot import types, TeleBot
+
+from botrequests.highprice import get_highprice_hotels
 from botrequests.lowprice import get_lowprice_hotels
 from infastructure.meta_date_options import MetaDateOptions
 from models.request_param_model import RequestParamModel
 from data.user_data import UserData
-from loguru import logger
-import re
 
 token = os.environ.get('TOKEN')
 bot = TeleBot(token, parse_mode=None)
@@ -74,7 +75,7 @@ def get_history(message):
     pass
 
 
-def choose_chain(message: Message, from_user_id: int, command: str, is_from_call:bool, text, is_detailed_survey: bool = False):
+def choose_chain(message: types.Message, from_user_id: int, command: str, is_from_call:bool, text, is_detailed_survey: bool = False):
     # Удаляет клавиатуру выбора
     if is_from_call:
         bot.edit_message_text(text=text, message_id=message.message_id, chat_id=message.chat.id,
@@ -142,7 +143,9 @@ def get_photos_count(message, request_param: RequestParamModel):
 def result_handler(message, request_param: RequestParamModel = None):
     bot.send_message(message.from_user.id, 'Это может занять какое-то время. Пожалуйста подождите немного 👌')
     if request_param.command == '/lowprice':
-        result = get_lowprice_hotels(requestParamModel=request_param, meta_date=MetaDateOptions().meta_date)
+        result = get_lowprice_hotels(request_param_model=request_param, meta_date=MetaDateOptions().meta_date)
+    elif request_param.command == '/highprice':
+        result = get_highprice_hotels(request_param_model=request_param, meta_date=MetaDateOptions().meta_date)
     for hotel in result:
         bot.send_message(message.from_user.id, hotel, disable_web_page_preview=True)
         if hotel.photos_urls is not None:
