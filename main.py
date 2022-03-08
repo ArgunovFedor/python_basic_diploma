@@ -6,8 +6,10 @@ from typing import Callable
 from loguru import logger
 from telebot import types, TeleBot
 
+from botrequests.bestdeal import get_bestdeal_hotels
 from botrequests.highprice import get_highprice_hotels
 from botrequests.lowprice import get_lowprice_hotels
+from exceptions.api_exception import ApiException
 from infastructure.meta_date_options import MetaDateOptions
 from models.request_param_model import RequestParamModel
 from data.user_data import UserData
@@ -90,26 +92,26 @@ def get_city(message, request_param: RequestParamModel = None):
     request_param.city = message.text
     request_param.previous_step = get_city
     if request_param.is_detailed_survey:
-        bot.send_message(message.from_user.id, 'Введите диапазон цен через дефис. Например, 50-100:')
+        bot.send_message(message.from_user.id, 'Введите диапазон цен через дефис рублях. Например, 0-10000:')
         bot.register_next_step_handler(message, get_range_price, request_param)
     else:
         bot.send_message(message.from_user.id, 'Количество отелей, которые необходимо вывести в результате:')
         bot.register_next_step_handler(message, get_hotels_count, request_param)
 
 
-@validator_with_regex('r\d+-\d+$', 'К сожалению, вы ввели неправильный диапазон цифр. Попробуйте заново')
+@validator_with_regex(r'\d+-\d+$', 'К сожалению, вы ввели неправильный диапазон цифр. Попробуйте заново')
 def get_range_price(message, request_param: RequestParamModel = None):
     request_param.previous_step = get_range_price
     request_param.price_range = message.text.split('-')
     bot.send_message(message.from_user.id,
-                     'Введите диапазон расстояния, на котором находится отель от центра через дефис. Например, 50-100:')
+                     'Введите диапазон расстояния, на котором находится отель от центра через дефис в км. Например, 50-100:')
     bot.register_next_step_handler(message, range_of_distance, request_param)
 
 
-@validator_with_regex('r\d+-\d+$', 'К сожалению, вы ввели неправильный диапазон цифр. Попробуйте заново')
+@validator_with_regex(r'\d+-\d+$', 'К сожалению, вы ввели неправильный диапазон цифр. Попробуйте заново')
 def range_of_distance(message, request_param: RequestParamModel = None):
     request_param.previous_step = range_of_distance
-    request_param.range_of_distance = message.text.split('-')
+    request_param.range_of_distance = [int(item) for item in message.text.split('-')]
     bot.send_message(message.from_user.id, 'Количество отелей, которые необходимо вывести в результате:')
     bot.register_next_step_handler(message, get_hotels_count, request_param)
 
@@ -139,19 +141,29 @@ def get_photos_count(message, request_param: RequestParamModel):
     request_param.photos_count = message.text
     result_handler(message, request_param)
 
-
+@logger.catch
 def result_handler(message, request_param: RequestParamModel = None):
-    bot.send_message(message.from_user.id, 'Это может занять какое-то время. Пожалуйста подождите немного 👌')
-    if request_param.command == '/lowprice':
-        result = get_lowprice_hotels(request_param_model=request_param, meta_date=MetaDateOptions().meta_date)
-    elif request_param.command == '/highprice':
-        result = get_highprice_hotels(request_param_model=request_param, meta_date=MetaDateOptions().meta_date)
-    for hotel in result:
-        bot.send_message(message.from_user.id, hotel, disable_web_page_preview=True)
-        if hotel.photos_urls is not None:
-            for photos_url in hotel.photos_urls:
-                bot.send_photo(message.from_user.id, photos_url)
-    start(message)
+    try:
+        bot.send_message(message.from_user.id, 'Это может занять какое-то время. Пожалуйста подождите немного 👌')
+        if request_param.command == '/lowprice':
+            result = get_lowprice_hotels(request_param_model=request_param, meta_date=MetaDateOptions().meta_date)
+        elif request_param.command == '/highprice':
+            result = get_highprice_hotels(request_param_model=request_param, meta_date=MetaDateOptions().meta_date)
+        elif request_param.command == '/bestdeal':
+            result = get_bestdeal_hotels(request_param_model=request_param, meta_date=MetaDateOptions().meta_date)
+        for hotel in result:
+            bot.send_message(message.from_user.id, hotel, disable_web_page_preview=True)
+            if hotel.photos_urls is not None:
+                for photos_url in hotel.photos_urls:
+                    bot.send_photo(message.from_user.id, photos_url)
+    except ApiException as exception:
+        error_code, description = exception.args[0].split(':')
+        if error_code == 'EMPTY':
+            bot.send_message(message.from_user.id, description)
+    except Exception:
+        bot.send_message(message.from_user.id, 'Извините, но произошла внутренняя ошибка')
+    finally:
+        start(message)
 
 
 @bot.message_handler(content_types=['text'])

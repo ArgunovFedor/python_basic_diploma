@@ -4,14 +4,14 @@ from infastructure.hotels_urls_options import HotelsUrlsOptions
 
 
 class HotelResultModel:
-    def __init__(self):
-        self.__photos_urls = None
-        self.__price = None
-        self.__address = None
-        self.__name = None
-        self.__hotel_id = None
-        self.__distance = None
-        self.__url = None
+    def __init__(self, photos_urls=None, price=None, address=None, name=None, hotel_id=None, distance=None, url=None):
+        self.__photos_urls = photos_urls
+        self.__price = price
+        self.__address = address
+        self.__name = name
+        self.__hotel_id = hotel_id
+        self.__distance = distance
+        self.__url = url
 
     @property
     def url(self):
