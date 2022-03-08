@@ -144,7 +144,7 @@ def result_handler(message, request_param: RequestParamModel = None):
     if request_param.command == '/lowprice':
         result = get_lowprice_hotels(requestParamModel=request_param, meta_date=MetaDateOptions().meta_date)
     for hotel in result:
-        bot.send_message(message.from_user.id, hotel)
+        bot.send_message(message.from_user.id, hotel, disable_web_page_preview=True)
         if hotel.photos_urls is not None:
             for photos_url in hotel.photos_urls:
                 bot.send_photo(message.from_user.id, photos_url)

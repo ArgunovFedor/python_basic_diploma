@@ -1,5 +1,7 @@
 from typing import List, Dict
 
+from infastructure.hotels_urls_options import HotelsUrlsOptions
+
 
 class HotelResultModel:
     def __init__(self):
@@ -9,6 +11,12 @@ class HotelResultModel:
         self.__name = None
         self.__hotel_id = None
         self.__distance = None
+        self.__url = None
+
+    @property
+    def url(self):
+        return HotelsUrlsOptions().hotels_urls['url_path_to_the_hotel_page'].format(id=self.__hotel_id)
+
 
     @property
     def hotel_id(self):
