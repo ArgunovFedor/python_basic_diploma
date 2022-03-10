@@ -1,7 +1,7 @@
 import functools
 import os
 import re
-from typing import Callable
+from typing import Callable, List
 
 from loguru import logger
 from telebot import types, TeleBot
@@ -9,28 +9,37 @@ from telebot import types, TeleBot
 from botrequests.bestdeal import get_bestdeal_hotels
 from botrequests.highprice import get_highprice_hotels
 from botrequests.lowprice import get_lowprice_hotels
+from data.user_data import UserData
 from exceptions.api_exception import ApiException
 from infastructure.meta_date_options import MetaDateOptions
+from models.hotel_result_model import HotelResultModel
 from models.request_param_model import RequestParamModel
-from data.user_data import UserData
 
 token = os.environ.get('TOKEN')
 bot = TeleBot(token, parse_mode=None)
+logger.level(name='HISTORY', no=1, color=None, icon=None)
+logger.add("debug.log", filter=lambda record: record["level"].name == "DEBUG",
+           retention="10 days")
+logger.add("info.log", filter=lambda record: record["level"].name == "INFO",
+           retention="10 days")
+logger.add("error.log", filter=lambda record: record["level"].name == "ERROR", rotation='5 MB',
+           retention="10 days")
+logger.add("history.log", filter=lambda record: record["level"].name == "HISTORY", format='{time:DD:MM:YYYY HH:mm:ss}%{message}',
+           level='HISTORY', retention="10 days")
 
 
 def user_data_decorator(func: Callable):
     user_data = UserData(dict())
-    logger.add('debug.json', format='{time} {level} {message}', level='DEBUG', rotation='5 MB', compression='zip',
-               serialize=True)
 
     def wrapped(*args, **kwargs):
+        result: List[HotelResultModel] = func(*args, **kwargs)
         message = args[0]
         if message.from_user.id not in user_data.users.keys():
             user_data.create_user(message)
-        else:
-            user_data.update_user(message)
+        if result is not None:
+            logger.log('HISTORY', '🧐'.join([str(message.from_user.id), '😎'.join(
+                ['*'.join(['Название:' + hotel.name, 'Адрес:' + hotel.address, 'Цена:' + hotel.price, 'URL:' + hotel.url]) for hotel in result])]))
 
-        result = func(*args, **kwargs)
         return result
 
     return wrapped
@@ -64,26 +73,46 @@ def callback_worker(call):
 
 def initial_step(message, command: str, from_user_id: int, is_from_call=False):
     if command == "/highprice":
-        choose_chain(message=message, command=command, from_user_id=from_user_id, is_from_call=is_from_call, text='Дорогие отели 👌')
+        choose_chain(message=message, command=command, from_user_id=from_user_id, is_from_call=is_from_call,
+                     text='Дорогие отели 👌')
     elif command == "/bestdeal":
-        choose_chain(message=message, command=command, from_user_id=from_user_id, is_from_call=is_from_call, text='С фильтром 👌', is_detailed_survey=True)
+        choose_chain(message=message, command=command, from_user_id=from_user_id, is_from_call=is_from_call,
+                     text='С фильтром 👌', is_detailed_survey=True)
     elif command == "/lowprice":
         choose_chain(message=message, command=command, from_user_id=from_user_id, is_from_call=is_from_call, text='Дешевые отели 👌')
     else:
-        bot.send_message(message.message.chat.id, text="Введите свой вопрос")
-        bot.register_next_step_handler(message, get_history)
+        get_history(message=message, is_from_call=is_from_call)
 
 
-def get_history(message):
-    raise NotImplementedError
-    pass
+def get_history(message, is_from_call: bool = False, text: str = 'История 👌'):
+    try:
+        # Удаляет клавиатуру выбора
+        if is_from_call:
+            bot.edit_message_text(text=text, message_id=message.message_id, chat_id=message.chat.id,
+                                  reply_markup=None)
+        with open('history.log', mode='r', encoding='utf-8') as file:
+            data = file.readlines()
+            counter = 0
+            for string in data:
+                time, message_with_id = string.split('%')
+                user_id, items = message_with_id.split('🧐')
+                items = [item.replace('*', '\n') for item in items.split('😎')]
+                if int(user_id) == message.chat.id:
+                    counter += 1
+                    bot.send_message(message.chat.id, ' '.join([str(counter), 'запрос:']))
+                    bot.send_message(message.chat.id, 'Время: ' + time)
+                    bot.send_message(message.chat.id, '\n'.join(items), disable_web_page_preview=True)
+        return True
+    finally:
+        bot.send_message(message.chat.id, '/help')
 
 
-def choose_chain(message: types.Message, from_user_id: int, command: str, is_from_call:bool, text, is_detailed_survey: bool = False):
+def choose_chain(message: types.Message, from_user_id: int, command: str, is_from_call: bool, text,
+                 is_detailed_survey: bool = False):
     # Удаляет клавиатуру выбора
     if is_from_call:
         bot.edit_message_text(text=text, message_id=message.message_id, chat_id=message.chat.id,
-                          reply_markup=None)
+                              reply_markup=None)
     bot.send_message(from_user_id, 'Введите город, где будет проводиться поиск:')
     request_param = RequestParamModel(is_detailed_survey=is_detailed_survey, command=command)
     request_param.previous_step = choose_chain, message.text
@@ -143,8 +172,9 @@ def get_photos_count(message, request_param: RequestParamModel):
     request_param.photos_count = message.text
     result_handler(message, request_param)
 
+
 @user_data_decorator
-def result_handler(message, request_param: RequestParamModel = None):
+def result_handler(message, request_param: RequestParamModel = None) -> List:
     try:
         bot.send_message(message.from_user.id, 'Это может занять какое-то время. Пожалуйста подождите немного 👌')
         if request_param.command == '/lowprice':
@@ -158,9 +188,12 @@ def result_handler(message, request_param: RequestParamModel = None):
             if hotel.photos_urls is not None:
                 for photos_url in hotel.photos_urls:
                     bot.send_photo(message.from_user.id, photos_url)
+        return result
     except ApiException as exception:
         error_code, description = exception.args[0].split(':')
         if error_code == 'EMPTY':
+            bot.send_message(message.from_user.id, description)
+        elif error_code == 'SEARCH':
             bot.send_message(message.from_user.id, description)
     except Exception:
         bot.send_message(message.from_user.id, 'Извините, но произошла внутренняя ошибка')
@@ -173,8 +206,10 @@ def result_handler(message, request_param: RequestParamModel = None):
 def start(message):
     if message.text == '/hello_world':
         bot.send_message(message.from_user.id, "Привет мир")
-    elif message.text in ['/highprice', '/bestdeal', '/history', '/lowprice']:
+    elif message.text in ['/highprice', '/bestdeal', '/lowprice']:
         initial_step(message=message, command=message.text, from_user_id=message.from_user.id)
+    elif message.text == '/history':
+        get_history(message=message)
     else:
         keyboard = generate_main_keyboard()
         bot.send_message(message.from_user.id, text='Выберите одно 👇:', reply_markup=keyboard)
