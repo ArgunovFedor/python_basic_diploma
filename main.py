@@ -46,9 +46,11 @@ def validator_with_regex(pattern: str, error_message: str):
             if is_acceptable is None:
                 logger.error('VALIDATION. Ошибка валидации')
                 bot.send_message(message.from_user.id, error_message)
-                return request_param.previous_step(message, request_param)
-            result = func(*args, **kwargs)
-            return result
+                message.text = request_param.previous_step[1]
+                return request_param.previous_step[0](message, request_param)
+            else:
+                result = func(*args, **kwargs)
+                return result
 
         return wrapper
 
@@ -84,13 +86,13 @@ def choose_chain(message: types.Message, from_user_id: int, command: str, is_fro
                           reply_markup=None)
     bot.send_message(from_user_id, 'Введите город, где будет проводиться поиск:')
     request_param = RequestParamModel(is_detailed_survey=is_detailed_survey, command=command)
-    request_param.previous_step = choose_chain
+    request_param.previous_step = choose_chain, message.text
     bot.register_next_step_handler(message, get_city, request_param)
 
 
 def get_city(message, request_param: RequestParamModel = None):
     request_param.city = message.text
-    request_param.previous_step = get_city
+    request_param.previous_step = get_city, message.text
     if request_param.is_detailed_survey:
         bot.send_message(message.from_user.id, 'Введите диапазон цен через дефис рублях. Например, 0-10000:')
         bot.register_next_step_handler(message, get_range_price, request_param)
@@ -101,7 +103,7 @@ def get_city(message, request_param: RequestParamModel = None):
 
 @validator_with_regex(r'\d+-\d+$', 'К сожалению, вы ввели неправильный диапазон цифр. Попробуйте заново')
 def get_range_price(message, request_param: RequestParamModel = None):
-    request_param.previous_step = get_range_price
+    request_param.previous_step = get_range_price, message.text
     request_param.price_range = message.text.split('-')
     bot.send_message(message.from_user.id,
                      'Максимальное расстояние от центра км. Например, 3:')
@@ -110,7 +112,7 @@ def get_range_price(message, request_param: RequestParamModel = None):
 
 @validator_with_regex(r'\b\d+$', 'К сожалению, вы ввели неправильное число. Попробуйте заново')
 def range_of_distance(message, request_param: RequestParamModel = None):
-    request_param.previous_step = range_of_distance
+    request_param.previous_step = range_of_distance, message.text
     request_param.max_distance = int(message.text)
     bot.send_message(message.from_user.id, 'Количество отелей, которые необходимо вывести в результате:')
     bot.register_next_step_handler(message, get_hotels_count, request_param)
@@ -118,14 +120,14 @@ def range_of_distance(message, request_param: RequestParamModel = None):
 
 @validator_with_regex(r'\b\d+$', 'К сожалению, вы ввели неправильный диапазон цифр. Попробуйте заново')
 def get_hotels_count(message, request_param: RequestParamModel = None):
-    request_param.previous_step = get_hotels_count
+    request_param.previous_step = get_hotels_count, message.text
     request_param.hotels_count = message.text
     bot.send_message(message.from_user.id, 'Необходимость загрузки и вывода фотографий для каждого отеля (“Да/Нет”):')
     bot.register_next_step_handler(message, get_with_photos, request_param)
 
 
 def get_with_photos(message, request_param: RequestParamModel = None):
-    request_param.previous_step = get_with_photos
+    request_param.previous_step = get_with_photos, message.text
     if message.text.lower() == 'да':
         request_param.is_with_photos = True
         bot.send_message(message.from_user.id, 'Введите количество фотографий:')
@@ -137,11 +139,11 @@ def get_with_photos(message, request_param: RequestParamModel = None):
 
 @validator_with_regex(r'\b\d+$', 'Введите число. Попробуйте заново')
 def get_photos_count(message, request_param: RequestParamModel):
-    request_param.previous_step = get_photos_count
+    request_param.previous_step = get_photos_count, message.text
     request_param.photos_count = message.text
     result_handler(message, request_param)
 
-@logger.catch
+@user_data_decorator
 def result_handler(message, request_param: RequestParamModel = None):
     try:
         bot.send_message(message.from_user.id, 'Это может занять какое-то время. Пожалуйста подождите немного 👌')
@@ -167,7 +169,6 @@ def result_handler(message, request_param: RequestParamModel = None):
 
 
 @bot.message_handler(content_types=['text'])
-@user_data_decorator
 @logger.catch
 def start(message):
     if message.text == '/hello_world':
