@@ -104,14 +104,14 @@ def get_range_price(message, request_param: RequestParamModel = None):
     request_param.previous_step = get_range_price
     request_param.price_range = message.text.split('-')
     bot.send_message(message.from_user.id,
-                     'Введите диапазон расстояния, на котором находится отель от центра через дефис в км. Например, 50-100:')
+                     'Максимальное расстояние от центра км. Например, 3:')
     bot.register_next_step_handler(message, range_of_distance, request_param)
 
 
-@validator_with_regex(r'\d+-\d+$', 'К сожалению, вы ввели неправильный диапазон цифр. Попробуйте заново')
+@validator_with_regex(r'\b\d+$', 'К сожалению, вы ввели неправильное число. Попробуйте заново')
 def range_of_distance(message, request_param: RequestParamModel = None):
     request_param.previous_step = range_of_distance
-    request_param.range_of_distance = [int(item) for item in message.text.split('-')]
+    request_param.max_distance = int(message.text)
     bot.send_message(message.from_user.id, 'Количество отелей, которые необходимо вывести в результате:')
     bot.register_next_step_handler(message, get_hotels_count, request_param)
 

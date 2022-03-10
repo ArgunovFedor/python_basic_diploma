@@ -8,7 +8,7 @@ class RequestParamModel:
     def __init__(self, city: str = None, command: str = None, is_detailed_survey: bool = False):
         self.__is_detailed_survey = is_detailed_survey
         self.__price_range = None
-        self.__range_of_distance = None
+        self.__max_distance = None
         self.__photos_count = 0
         self.__is_with_photos = False
         self.__hotels_count = 0
@@ -90,12 +90,12 @@ class RequestParamModel:
         self.__price_range = price_range
 
     @property
-    def range_of_distance(self):
-        return self.__range_of_distance
+    def max_distance(self):
+        return self.__max_distance
 
-    @range_of_distance.setter
-    def range_of_distance(self, range_of_distance):
-        self.__range_of_distance = range_of_distance
+    @max_distance.setter
+    def max_distance(self, max_distance):
+        self.__max_distance = max_distance
 
     def get_min_price(self) -> int:
         return int(self.__price_range[0])
@@ -108,6 +108,6 @@ class RequestParamModel:
             distance: str = hotel.distance.split()[0]
             if ',' in distance:
                 distance = distance.replace(',', '.')
-            return self.__range_of_distance[0] <= float(distance) <= self.__range_of_distance[1]
+            return float(distance) <= self.__max_distance
         except Exception:
             raise BotErrorException('REQUEST_PARAM_EXCEPTION:Произошла внутренняя ошибка повторите попытку позднее')
