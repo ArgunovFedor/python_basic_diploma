@@ -1,5 +1,6 @@
 import functools
-import os
+from decouple import config
+
 import re
 from typing import Callable, List
 
@@ -15,8 +16,9 @@ from infastructure.meta_date_options import MetaDateOptions
 from models.hotel_result_model import HotelResultModel
 from models.request_param_model import RequestParamModel
 
-token = os.environ.get('TOKEN')
+token = config('TOKEN')
 bot = TeleBot(token, parse_mode=None)
+
 logger.level(name='HISTORY', no=1, color=None, icon=None)
 logger.add("debug.log", filter=lambda record: record["level"].name == "DEBUG",
            retention="10 days")

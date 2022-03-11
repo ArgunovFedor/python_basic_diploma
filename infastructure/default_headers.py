@@ -1,9 +1,9 @@
-import os
+from decouple import config
 
 from infastructure.singleton import Singleton
 
-rad_api_host = os.environ.get('x-rapidapi-host')
-rad_api_key = os.environ.get('x-rapidapi-key')
+rad_api_host = config('x-rapidapi-host')
+rad_api_key = config('x-rapidapi-key')
 
 
 class DefaultHeaders(Singleton):
