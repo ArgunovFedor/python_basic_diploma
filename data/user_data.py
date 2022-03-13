@@ -17,10 +17,7 @@ class UserData:
         self.__users = data
 
     def create_user(self, message) -> None:
-        self.__users[message.from_user.id] = [message.text]
-
-    def update_user(self, message) -> None:
-        self.__users[message.from_user.id].append(message.text)
+        self.__users[message.from_user.id] = message.from_user.id
 
     def get_user_value_by_id(self, id: int) -> dict:
         return self.__users[id]

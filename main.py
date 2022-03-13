@@ -1,4 +1,6 @@
 import functools
+import os
+
 from decouple import config
 
 import re
@@ -6,6 +8,7 @@ from typing import Callable, List
 
 from loguru import logger
 from telebot import types, TeleBot
+from telebot.types import InputMediaPhoto
 
 from botrequests.bestdeal import get_bestdeal_hotels
 from botrequests.highprice import get_highprice_hotels
@@ -13,7 +16,6 @@ from botrequests.lowprice import get_lowprice_hotels
 from data.user_data import UserData
 from exceptions.api_exception import ApiException
 from infastructure.meta_date_options import MetaDateOptions
-from models.hotel_result_model import HotelResultModel
 from models.request_param_model import RequestParamModel
 
 token = config('TOKEN')
@@ -26,27 +28,67 @@ logger.add("info.log", filter=lambda record: record["level"].name == "INFO",
            retention="10 days")
 logger.add("error.log", filter=lambda record: record["level"].name == "ERROR", rotation='5 MB',
            retention="10 days")
-logger.add("history.log", filter=lambda record: record["level"].name == "HISTORY", format='{time:DD:MM:YYYY HH:mm:ss}%{message}',
+logger.add("history.log", filter=lambda record: record["level"].name == "HISTORY",
+           format='{time:DD:MM:YYYY HH:mm:ss}%{message}',
            level='HISTORY', retention="10 days")
 
 
+@logger.catch
+def init_dict_from_history_log():
+    new_dict = dict()
+    if os.path.isfile('history.log'):
+        with open('history.log', mode='r', encoding='utf-8') as file:
+            data = file.readlines()
+            for string in data:
+                time, message_with_id = string.split('%')
+                user_id, items = message_with_id.split('🧐')
+                new_dict[user_id] = int(user_id)
+    return new_dict
+
+
+@logger.catch
 def user_data_decorator(func: Callable):
-    user_data = UserData(dict())
+    user_data = UserData(init_dict_from_history_log())
+    # мы сохраняем данные запроса пользователя
+    # для этого логгируем результат этой функции
+    last_step_func_name = 'result_handler'
 
     def wrapped(*args, **kwargs):
-        result: List[HotelResultModel] = func(*args, **kwargs)
-        message = args[0]
-        if message.from_user.id not in user_data.users.keys():
+        # есть несколько методов и параметры этих методов порой друг от друга отличаются
+        # поэтому message может быть в args или kwargs, если message отсутствует, то мы пропускаем этот метод
+        if len(args) > 0:
+            message = args[0]
+        elif 'message' in kwargs.keys():
+            message = kwargs['message']
+        else:
+            return func(*args, **kwargs)
+        if message.from_user.id not in user_data.users.values() and message.from_user.is_bot is not True:
+            logger.log('INFO', ''.join(['В систему зашёл новый пользователь с ID:', str(message.from_user.id)]))
             user_data.create_user(message)
-        if result is not None:
+        else:
+            if message.from_user.is_bot is not True:
+                logger.log('INFO',
+                           ' '.join(['Пользователь c ID:', str(message.from_user.id), 'вызвал функцию:', func.__name__,
+                                     'с текстом', message.text]))
+            else:
+                logger.log('INFO',
+                           ' '.join(['Пользователь c ID:', str(message.chat.id), 'вызвал функцию:', func.__name__,
+                                     'с текстом', message.text]))
+        result = func(*args, **kwargs)
+
+        if result is not None and func.__name__ == last_step_func_name:
+            # записываем результат запроса в лог в файл history
             logger.log('HISTORY', '🧐'.join([str(message.from_user.id), '😎'.join(
-                ['*'.join(['Название:' + hotel.name, 'Адрес:' + hotel.address, 'Цена:' + hotel.price, 'URL:' + hotel.url]) for hotel in result])]))
+                ['*'.join(
+                    ['Название:' + hotel.name, 'Адрес:' + hotel.address, 'Цена:' + hotel.price, 'URL:' + hotel.url]) for
+                    hotel in result])]))
 
         return result
 
     return wrapped
 
 
+@logger.catch
 def validator_with_regex(pattern: str, error_message: str):
     def validator_decorator(func: Callable) -> Callable:
         @functools.wraps(func)
@@ -68,11 +110,15 @@ def validator_with_regex(pattern: str, error_message: str):
     return validator_decorator
 
 
+@logger.catch
+@user_data_decorator
 @bot.callback_query_handler(func=lambda call: call.data in ['/highprice', '/bestdeal', '/history', '/lowprice'])
 def callback_worker(call):
     initial_step(message=call.message, command=call.data, from_user_id=call.from_user.id, is_from_call=True)
 
 
+@logger.catch
+@user_data_decorator
 def initial_step(message, command: str, from_user_id: int, is_from_call=False):
     if command == "/highprice":
         choose_chain(message=message, command=command, from_user_id=from_user_id, is_from_call=is_from_call,
@@ -81,11 +127,14 @@ def initial_step(message, command: str, from_user_id: int, is_from_call=False):
         choose_chain(message=message, command=command, from_user_id=from_user_id, is_from_call=is_from_call,
                      text='С фильтром 👌', is_detailed_survey=True)
     elif command == "/lowprice":
-        choose_chain(message=message, command=command, from_user_id=from_user_id, is_from_call=is_from_call, text='Дешевые отели 👌')
+        choose_chain(message=message, command=command, from_user_id=from_user_id, is_from_call=is_from_call,
+                     text='Дешевые отели 👌')
     else:
         get_history(message=message, is_from_call=is_from_call)
 
 
+@logger.catch
+@user_data_decorator
 def get_history(message, is_from_call: bool = False, text: str = 'История 👌'):
     try:
         # Удаляет клавиатуру выбора
@@ -109,6 +158,8 @@ def get_history(message, is_from_call: bool = False, text: str = 'История
         bot.send_message(message.chat.id, '/help')
 
 
+@logger.catch
+@user_data_decorator
 def choose_chain(message: types.Message, from_user_id: int, command: str, is_from_call: bool, text,
                  is_detailed_survey: bool = False):
     # Удаляет клавиатуру выбора
@@ -121,6 +172,8 @@ def choose_chain(message: types.Message, from_user_id: int, command: str, is_fro
     bot.register_next_step_handler(message, get_city, request_param)
 
 
+@logger.catch
+@user_data_decorator
 def get_city(message, request_param: RequestParamModel = None):
     request_param.city = message.text
     request_param.previous_step = get_city, message.text
@@ -132,7 +185,9 @@ def get_city(message, request_param: RequestParamModel = None):
         bot.register_next_step_handler(message, get_hotels_count, request_param)
 
 
+@logger.catch
 @validator_with_regex(r'\d+-\d+$', 'К сожалению, вы ввели неправильный диапазон цифр. Попробуйте заново')
+@user_data_decorator
 def get_range_price(message, request_param: RequestParamModel = None):
     request_param.previous_step = get_range_price, message.text
     request_param.price_range = message.text.split('-')
@@ -141,7 +196,9 @@ def get_range_price(message, request_param: RequestParamModel = None):
     bot.register_next_step_handler(message, range_of_distance, request_param)
 
 
+@logger.catch
 @validator_with_regex(r'\b\d+$', 'К сожалению, вы ввели неправильное число. Попробуйте заново')
+@user_data_decorator
 def range_of_distance(message, request_param: RequestParamModel = None):
     request_param.previous_step = range_of_distance, message.text
     request_param.max_distance = int(message.text)
@@ -149,7 +206,9 @@ def range_of_distance(message, request_param: RequestParamModel = None):
     bot.register_next_step_handler(message, get_hotels_count, request_param)
 
 
+@logger.catch
 @validator_with_regex(r'\b\d+$', 'К сожалению, вы ввели неправильный диапазон цифр. Попробуйте заново')
+@user_data_decorator
 def get_hotels_count(message, request_param: RequestParamModel = None):
     request_param.previous_step = get_hotels_count, message.text
     request_param.hotels_count = message.text
@@ -157,6 +216,8 @@ def get_hotels_count(message, request_param: RequestParamModel = None):
     bot.register_next_step_handler(message, get_with_photos, request_param)
 
 
+@logger.catch
+@user_data_decorator
 def get_with_photos(message, request_param: RequestParamModel = None):
     request_param.previous_step = get_with_photos, message.text
     if message.text.lower() == 'да':
@@ -168,13 +229,16 @@ def get_with_photos(message, request_param: RequestParamModel = None):
         result_handler(message, request_param)
 
 
+@logger.catch
 @validator_with_regex(r'\b\d+$', 'Введите число. Попробуйте заново')
+@user_data_decorator
 def get_photos_count(message, request_param: RequestParamModel):
     request_param.previous_step = get_photos_count, message.text
     request_param.photos_count = message.text
     result_handler(message, request_param)
 
 
+@logger.catch
 @user_data_decorator
 def result_handler(message, request_param: RequestParamModel = None) -> List:
     try:
@@ -186,10 +250,10 @@ def result_handler(message, request_param: RequestParamModel = None) -> List:
         elif request_param.command == '/bestdeal':
             result = get_bestdeal_hotels(request_param_model=request_param, meta_date=MetaDateOptions().meta_date)
         for hotel in result:
-            bot.send_message(message.from_user.id, hotel, disable_web_page_preview=True)
             if hotel.photos_urls is not None:
-                for photos_url in hotel.photos_urls:
-                    bot.send_photo(message.from_user.id, photos_url)
+                bot.send_media_group(message.from_user.id,
+                                     [InputMediaPhoto(photo_url) for photo_url in hotel.photos_urls])
+            bot.send_message(message.from_user.id, hotel, disable_web_page_preview=True)
         return result
     except ApiException as exception:
         error_code, description = exception.args[0].split(':')
@@ -205,6 +269,7 @@ def result_handler(message, request_param: RequestParamModel = None) -> List:
 
 @bot.message_handler(content_types=['text'])
 @logger.catch
+@user_data_decorator
 def start(message):
     if message.text == '/hello_world':
         bot.send_message(message.from_user.id, "Привет мир")
@@ -217,6 +282,7 @@ def start(message):
         bot.send_message(message.from_user.id, text='Выберите одно 👇:', reply_markup=keyboard)
 
 
+@logger.catch
 def generate_main_keyboard():
     # клавиатура
     keyboard = types.InlineKeyboardMarkup(row_width=2)  # наша клавиатура
