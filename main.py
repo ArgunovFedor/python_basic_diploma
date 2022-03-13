@@ -34,21 +34,8 @@ logger.add("history.log", filter=lambda record: record["level"].name == "HISTORY
 
 
 @logger.catch
-def init_dict_from_history_log():
-    new_dict = dict()
-    if os.path.isfile('history.log'):
-        with open('history.log', mode='r', encoding='utf-8') as file:
-            data = file.readlines()
-            for string in data:
-                time, message_with_id = string.split('%')
-                user_id, items = message_with_id.split('🧐')
-                new_dict[user_id] = int(user_id)
-    return new_dict
-
-
-@logger.catch
 def user_data_decorator(func: Callable):
-    user_data = UserData(init_dict_from_history_log())
+    user_data = UserData()
     # мы сохраняем данные запроса пользователя
     # для этого логгируем результат этой функции
     last_step_func_name = 'result_handler'
@@ -62,18 +49,19 @@ def user_data_decorator(func: Callable):
             message = kwargs['message']
         else:
             return func(*args, **kwargs)
-        if message.from_user.id not in user_data.users.values() and message.from_user.is_bot is not True:
-            logger.log('INFO', ''.join(['В систему зашёл новый пользователь с ID:', str(message.from_user.id)]))
-            user_data.create_user(message)
+
+        if message.from_user.is_bot is True:
+            current_user_id = str(message.chat.id)
         else:
-            if message.from_user.is_bot is not True:
-                logger.log('INFO',
-                           ' '.join(['Пользователь c ID:', str(message.from_user.id), 'вызвал функцию:', func.__name__,
-                                     'с текстом', message.text]))
-            else:
-                logger.log('INFO',
-                           ' '.join(['Пользователь c ID:', str(message.chat.id), 'вызвал функцию:', func.__name__,
-                                     'с текстом', message.text]))
+            current_user_id = str(message.from_user.id)
+
+        if current_user_id not in user_data.users.values():
+            logger.log('INFO', ''.join(['В систему зашёл новый пользователь с ID:', str(current_user_id)]))
+            user_data.create_user(current_user_id)
+        else:
+            logger.log('INFO',
+                       ' '.join(['Пользователь c ID:', str(current_user_id), 'вызвал функцию:', func.__name__,
+                                 'с текстом', message.text]))
         result = func(*args, **kwargs)
 
         if result is not None and func.__name__ == last_step_func_name:
