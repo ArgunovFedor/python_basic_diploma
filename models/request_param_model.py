@@ -1,4 +1,5 @@
 from collections import Callable
+from datetime import datetime
 
 from exceptions.bot_error_exception import BotErrorException
 from models.hotel_result_model import HotelResultModel
@@ -16,6 +17,25 @@ class RequestParamModel:
         self.__command = command
         self.__previous_step = None
         self.__sort_order = 'PRICE'
+        self.__check_in = ''
+        self.__check_out = ''
+
+    @property
+    def check_in(self) -> datetime:
+        return self.__check_in
+
+    @check_in.setter
+    def check_in(self, check_in: datetime):
+        self.__check_in = check_in
+
+    @property
+    def check_out(self) -> datetime:
+        return self.__check_out
+
+    @check_out.setter
+    def check_out(self, check_out: datetime):
+        self.__check_out = check_out
+
 
     @property
     def sort_order(self):
