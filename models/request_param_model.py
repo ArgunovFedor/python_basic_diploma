@@ -1,4 +1,4 @@
-from collections import Callable
+from typing import Callable
 from datetime import datetime
 
 from exceptions.bot_error_exception import BotErrorException

@@ -19,7 +19,7 @@ from infastructure.meta_date_options import MetaDateOptions
 from models.request_param_model import RequestParamModel
 
 token = config('TOKEN')
-bot = TeleBot(token, parse_mode=None)
+bot = TeleBot(token)
 
 logger.level(name='HISTORY', no=1, color=None, icon=None)
 logger.add("debug.log", filter=lambda record: record["level"].name == "DEBUG",
@@ -308,7 +308,9 @@ def result_handler(message, request_param: RequestParamModel = None) -> List:
             bot.send_message(message.from_user.id, description)
         elif error_code == 'SEARCH':
             bot.send_message(message.from_user.id, description)
-    except Exception:
+    except Exception as exception:
+        error_code, description = exception.args[0].split(':')
+        logger.log('ERROR', ' '.join([error_code, description]))
         bot.send_message(message.from_user.id, 'Извините, но произошла внутренняя ошибка')
     finally:
         start(message)

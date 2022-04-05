@@ -3,6 +3,13 @@ from typing import List, Dict
 from infastructure.hotels_urls_options import HotelsUrlsOptions
 
 
+def is_correct(address) -> str:
+    if 'streetAddress' in address.keys():
+        return address['streetAddress']
+    else:
+        return ''
+
+
 class HotelResultModel:
     def __init__(self, photos_urls=None, price=None, address=None, name=None, hotel_id=None, distance=None, url=None):
         self.__photos_urls = photos_urls
@@ -16,7 +23,6 @@ class HotelResultModel:
     @property
     def url(self):
         return HotelsUrlsOptions().hotels_urls['url_path_to_the_hotel_page'].format(id=self.__hotel_id)
-
 
     @property
     def hotel_id(self):
@@ -43,7 +49,7 @@ class HotelResultModel:
         self.__address = '{countryName}, {locality}, {streetAddress}'.format(
             countryName=address['countryName'],
             locality=address['locality'],
-            streetAddress=address['streetAddress']
+            streetAddress=is_correct(address)
         )
 
     @property
