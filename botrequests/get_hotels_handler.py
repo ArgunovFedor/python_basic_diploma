@@ -14,21 +14,21 @@ from models.request_param_model import RequestParamModel
 def get_hotels_handler(request_param_model: RequestParamModel = None, meta_date: List = None,
                        result_model: typing.Annotated = None) -> List[HotelResultModel]:
     url = HotelsUrlsOptions().hotels_urls['properties_list']
-    querystring = {"query": request_param_model.city, "locale": meta_date['hcomLocale'], "currency": "RUB"}
+    querystring = {'query': request_param_model.city, 'locale': meta_date['hcomLocale'], "currency": "RUB"}
     destination_ids_list = get_destinationIds_list(querystring, DefaultHeaders().get_headers)
     # 1 - это hotels
     check_in = request_param_model.check_in.strftime('%Y-%m-%d')
     check_out = request_param_model.check_out.strftime('%Y-%m-%d')
     querystring = {
-        "destinationId": destination_ids_list[0],
-        "pageNumber": "1",
-        "pageSize": request_param_model.hotels_count,
-        "checkIn": check_in,
-        "checkOut": check_out,
-        "adults1": "1",
-        "sortOrder": request_param_model.sort_order,
-        "locale": meta_date['hcomLocale'],
-        "currency": meta_date['currency']}
+        'destinationId': destination_ids_list[0],
+        'pageNumber': '1',
+        'pageSize': request_param_model.hotels_count,
+        'checkIn': check_in,
+        'checkOut': check_out,
+        'adults1': '1',
+        'sortOrder': request_param_model.sort_order,
+        'locale': meta_date['hcomLocale'],
+        'currency': meta_date['currency']}
     if request_param_model.price_range is not None:
         querystring['priceMin'] = request_param_model.get_min_price()
         querystring['priceMax'] = request_param_model.get_max_price()

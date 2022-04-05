@@ -8,13 +8,14 @@ from typing import Callable, List
 from loguru import logger
 from telebot import types, TeleBot
 from telebot.types import InputMediaPhoto
-from telegram_bot_calendar import DetailedTelegramCalendar, LSTEP
+from telegram_bot_calendar import DetailedTelegramCalendar
 
 from botrequests.bestdeal import get_bestdeal_hotels
 from botrequests.highprice import get_highprice_hotels
 from botrequests.lowprice import get_lowprice_hotels
 from data.user_data import UserData
 from exceptions.api_exception import ApiException
+from infastructure.calendar_list_step import StepList
 from infastructure.meta_date_options import MetaDateOptions
 from models.request_param_model import RequestParamModel
 
@@ -22,13 +23,13 @@ token = config('TOKEN')
 bot = TeleBot(token)
 
 logger.level(name='HISTORY', no=1, color=None, icon=None)
-logger.add("debug.log", filter=lambda record: record["level"].name == "DEBUG",
-           retention="10 days")
-logger.add("info.log", filter=lambda record: record["level"].name == "INFO",
-           retention="10 days")
-logger.add("error.log", filter=lambda record: record["level"].name == "ERROR", rotation='5 MB',
-           retention="10 days")
-logger.add("history.log", filter=lambda record: record["level"].name == "HISTORY",
+logger.add('debug.log', filter=lambda record: record['level'].name == 'DEBUG',
+           retention='10 days')
+logger.add('info.log', filter=lambda record: record['level'].name == 'INFO',
+           retention='10 days')
+logger.add('error.log', filter=lambda record: record['level'].name == 'ERROR', rotation='5 MB',
+           retention='10 days')
+logger.add('history.log', filter=lambda record: record['level'].name == 'HISTORY',
            format='{time:DD:MM:YYYY HH:mm:ss}%{message}',
            level='HISTORY', retention="10 days")
 
@@ -103,14 +104,14 @@ def validator_with_regex(pattern: str, error_message: str):
 def callback_worker(call):
     result, key, step = DetailedTelegramCalendar(calendar_id=1, locale='ru').process(call.data)
     if not result and key:
-        bot.edit_message_text(f"Сделайте выбор {LSTEP[step]}",
+        bot.edit_message_text(f"Выберите {StepList().step_list[step]}",
                               call.message.chat.id,
                               call.message.message_id,
                               reply_markup=key)
     elif result:
         request_param: RequestParamModel = DetailedTelegramCalendar.request_param
         request_param.check_in = result
-        bot.edit_message_text(f'Результат: {result}', call.message.chat.id, call.message.message_id,
+        bot.edit_message_text(f'Выбрана дата: {result}', call.message.chat.id, call.message.message_id,
                               reply_markup=None)
         get_check_out(message=call.message, request_param=DetailedTelegramCalendar.request_param)
 
@@ -121,14 +122,14 @@ def callback_worker(call):
 def callback_worker(call):
     result, key, step = DetailedTelegramCalendar(calendar_id=2, locale='ru').process(call.data)
     if not result and key:
-        bot.edit_message_text(f"Сделайте выбор {LSTEP[step]}",
+        bot.edit_message_text(f"Выберите {StepList().step_list[step]}",
                               call.message.chat.id,
                               call.message.message_id,
                               reply_markup=key)
     elif result:
         request_param: RequestParamModel = DetailedTelegramCalendar.request_param
         request_param.check_out = result
-        bot.edit_message_text(f'Результат: {result}', call.message.chat.id, call.message.message_id,
+        bot.edit_message_text(f'Выбрана дата: {result}', call.message.chat.id, call.message.message_id,
                               reply_markup=None)
         call.message.chat, call.message.from_user = call.message.from_user, call.message.chat
         result_handler(message=call.message, request_param=request_param)
@@ -270,7 +271,7 @@ def get_check_in(message, request_param: RequestParamModel):
     calendar, step = DetailedTelegramCalendar(calendar_id=1, locale='ru').build()
     DetailedTelegramCalendar.request_param = request_param
     bot.send_message(message.from_user.id,
-                     f"Select {LSTEP[step]}",
+                     'Выберите дату заезда:',
                      reply_markup=calendar)
 
 
@@ -281,7 +282,7 @@ def get_check_out(message, request_param: RequestParamModel):
     calendar, step = DetailedTelegramCalendar(calendar_id=2, locale='ru').build()
     DetailedTelegramCalendar.request_param = request_param
     bot.send_message(message.chat.id,
-                      f"Сделайте выбор {LSTEP[step]}",
+                     'Выберите дату выезда:',
                       reply_markup=calendar)
 
 
