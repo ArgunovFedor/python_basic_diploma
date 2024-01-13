@@ -1,0 +1,8 @@
+pip~=22.0.3
+setuptools~=56.0.0
+requests~=2.26.0
+loguru~=0.6.0
+python-decouple==3.6
+pyTelegramBotAPI
+python-telegram-bot-calendar
+python-decouple
